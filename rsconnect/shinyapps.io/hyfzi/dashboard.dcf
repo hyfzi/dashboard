@@ -1,0 +1,10 @@
+name: dashboard
+title:
+username: hyfzi
+account: hyfzi
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17276381
+bundleId: 11939695
+url: https://hyfzi.shinyapps.io/dashboard/
+version: 1
