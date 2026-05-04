@@ -15,7 +15,7 @@ gallery_1_tab <- tabItem(
       box(
         title = "Subject Distribution",
         width = 12,
-        plotOutput("plot1", height = 250)
+        plotOutput("plot1")
       ),
     ),
     column(
@@ -29,10 +29,29 @@ gallery_1_tab <- tabItem(
       box(
         title = "Group Variable",
         width = 12,
-        selectInput("group_var", "Select Group Variable",
-                      choices = c("TRT01P", "SITEID", "SEX", "RACE", "RACEGR1", "EOSSTT"), 
+        selectInput("group_var1", "Select Group Variable1",
+                      choices = c("TRT01P", "SITEID", "SEX", "RACEGR1", "EOSSTT", "AGE"), 
+                      selected = "SITEID",
+                      multiple = FALSE),
+        selectInput("group_var2", "Select Group Variable2",
+                      choices = c("TRT01P", "SITEID", "SEX", "RACEGR1", "EOSSTT", "None"), 
                       selected = "TRT01P",
                       multiple = FALSE)
+      )
+    )
+  )
+)
+
+# gallery_2_tab ----
+gallery_2_tab <- tabItem(
+  tabName = "xmind",
+  fluidRow(
+    column(
+      width = 12,
+      box(
+        title = "Xmind",
+        width = 12,
+        "This is the Xmind tab content."
       )
     )
   )
@@ -56,17 +75,18 @@ shinyApp(
       sidebarMenu(
         id = "current_tab",
         menuItem(
-          text = "Galleries",
+          text = "人口学与疾病特征",
           icon = icon("cubes"),
           startExpanded = FALSE,
           menuSubItem(
-            text = "受试者分布",
-            tabName = "sub_dist",
-            icon = icon("circle")
+            text = "项目图谱",
+            tabName = "xmind",
+            icon = icon("th")
           ),
           menuSubItem(
-            text = "Gallery 2",
-            tabName = "gallery2"
+            text = "参与者分布",
+            tabName = "sub_dist",
+            icon = icon("circle")
           )
         )
       )
@@ -98,7 +118,10 @@ shinyApp(
     ),
     footer = dashboardFooter(),
     body = dashboardBody(
-      gallery_1_tab
+      tabItems(
+        gallery_1_tab,
+        gallery_2_tab
+      )
     ),
     help = FALSE
   ),
@@ -115,32 +138,83 @@ shinyApp(
               AGE <= input$age[2])
     })
 
-    stat_model <- reactive({
-      endpoint_filter() |> 
-        group_by(.data[[input$group_var]]) |> 
-        summarise(
-          n = n_distinct(USUBJID)
-        ) |> 
-          arrange(desc(n))
-    })
-
     output$plot1 <- renderPlot({
-      df <- stat_model()
-      
-      ggplot(
-        df, 
-        aes(
-          x = fct_reorder(.data[[input$group_var]], n),
-          y = n
-        )
-      ) +
-        geom_col(fill = "#4C97FF") +
-        coord_flip() +
-        labs(
-            x = NULL,
-            y = "Count"
-          ) + 
-        theme_minimal(base_size = 13)
+      df <- endpoint_filter()
+
+      if (is.character(df[[input$group_var1]]) & is.character(df[[input$group_var2]]) & input$group_var1 != input$group_var2) {
+        stat_model <- reactive({
+          endpoint_filter() |> 
+            group_by(.data[[input$group_var1]], .data[[input$group_var2]]) |> 
+            summarise(
+              n = n_distinct(USUBJID),
+              .groups = "drop"
+            ) |> 
+            ungroup() |> 
+            mutate(
+              pct = n / sum(n),
+              !!input$group_var1 := reorder(.data[[input$group_var1]], pct, FUN = sum)
+              )
+        })
+        ggplot(
+          stat_model(), 
+          aes(
+            x = .data[[input$group_var1]],
+            y = pct,
+            fill = .data[[input$group_var2]]
+          )
+        ) +
+          geom_col() +
+          scale_y_continuous(labels = scales::percent) +
+          coord_flip() +
+          labs(
+              x = "",
+              y = "Percentage (Overall)",
+              fill = input$group_var2
+            ) + 
+          theme_minimal(base_size = 13)
+
+      }else if ((is.character(df[[input$group_var1]]) & input$group_var1 == input$group_var2) | 
+        (is.character(df[[input$group_var1]]) & input$group_var2 == "None")) {
+        stat_model <- reactive({
+          endpoint_filter() |> 
+            group_by(.data[[input$group_var1]]) |> 
+            summarise(
+              n = n_distinct(USUBJID),
+              .groups = "drop"
+            ) |> 
+            ungroup() |> 
+            mutate(
+              pct = n / sum(n),
+              !!input$group_var1 := reorder(.data[[input$group_var1]], pct, FUN = sum)
+              )
+        })
+        ggplot(
+          stat_model(), 
+          aes(
+            x = .data[[input$group_var1]],
+            y = pct
+          )
+        ) +
+          geom_col(fill = "#4C97FF",) +
+          scale_y_continuous(labels = scales::percent) +
+          coord_flip() +
+          labs(
+              x = "",
+              y = "Percentage (Overall)"
+            ) + 
+          theme_minimal(base_size = 13)
+        
+      }else if (is.numeric(df[[input$group_var1]])) {
+        ggplot(
+          endpoint_filter(), 
+          aes(x = .data[[input$group_var1]])
+        ) +
+          geom_histogram(fill = "#4C97FF", binwidth = 3) +
+          labs(
+              x = input$group_var1,
+              y = "Count"
+            )
+      }
     })
   }
 )
